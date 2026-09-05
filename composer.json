@@ -1,0 +1,55 @@
+{
+    "name": "sergeybruhin/laravel-analytics",
+    "description": "First-party, vendor-agnostic, event-based analytics (visitors, sessions, pageviews, goals) for Laravel apps, with a pluggable storage driver.",
+    "keywords": ["sergeybruhin", "laravel-analytics", "laravel", "analytics", "events", "tracking"],
+    "homepage": "https://github.com/sergeybruhin/laravel-analytics",
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Sergey Bruhin",
+            "email": "sundaycreative@gmail.com",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sergeybruhin/laravel-analytics/issues",
+        "source": "https://github.com/sergeybruhin/laravel-analytics"
+    },
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^12.0",
+        "illuminate/database": "^12.0",
+        "illuminate/http": "^12.0",
+        "illuminate/queue": "^12.0",
+        "jenssegers/agent": "^2.6"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0",
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SergeyBruhin\\Analytics\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SergeyBruhin\\Analytics\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "SergeyBruhin\\Analytics\\Providers\\AnalyticsServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "test-coverage": "vendor/bin/phpunit --coverage-html coverage"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
