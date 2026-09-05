@@ -4,6 +4,7 @@ namespace SergeyBruhin\Analytics\Drivers\Postgres\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Session extends Model
 {
@@ -35,5 +36,15 @@ class Session extends Model
     public function visitor(): BelongsTo
     {
         return $this->belongsTo(Visitor::class, 'visitor_id');
+    }
+
+    public function pageviews(): HasMany
+    {
+        return $this->hasMany(Pageview::class, 'session_id');
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class, 'session_id');
     }
 }

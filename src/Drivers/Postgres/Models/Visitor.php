@@ -3,6 +3,7 @@
 namespace SergeyBruhin\Analytics\Drivers\Postgres\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Visitor extends Model
 {
@@ -31,5 +32,20 @@ class Visitor extends Model
             'first_seen_at' => 'datetime',
             'last_seen_at' => 'datetime',
         ];
+    }
+
+    public function sessions(): HasMany
+    {
+        return $this->hasMany(Session::class, 'visitor_id');
+    }
+
+    public function pageviews(): HasMany
+    {
+        return $this->hasMany(Pageview::class, 'visitor_id');
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(Event::class, 'visitor_id');
     }
 }
