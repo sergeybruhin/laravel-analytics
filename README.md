@@ -99,6 +99,9 @@ ANALYTICS_DB_SCHEMA=analytics
 ANALYTICS_DB_SSLMODE=prefer
 
 ANALYTICS_QUEUE_CONNECTION=redis_analytics   # see "Queueing" below
+ANALYTICS_RATE_LIMIT_PER_VISITOR=300         # collect endpoint; 0 disables
+ANALYTICS_RATE_LIMIT_PER_IP=3000             # backstop for a shared egress
+ANALYTICS_RATE_LIMIT_DECAY_MINUTES=1
 ANALYTICS_RETENTION_DAYS=395                 # used by analytics:prune
 ANALYTICS_STORE_IP=true                      # false = store no IP-derived data at all
 ```
@@ -245,7 +248,25 @@ entirely with `ANALYTICS_STORE_IP=false`.
 The collect endpoint is anonymous and unauthenticated by design. It's
 protected by, in order:
 
-1. `throttle:120,1` per IP.
+1. `throttle:analytics-collect` — 300/min per visitor (`visitor_id` + IP)
+   with a 3000/min per-IP backstop, so one person behind a NAT can't
+   switch ingestion off for the rest of the building while a rotated
+   `visitor_id` still buys nothing. Tune with
+   `ANALYTICS_RATE_LIMIT_PER_VISITOR` / `ANALYTICS_RATE_LIMIT_PER_IP`;
+   set both to `0` to turn throttling off where a CDN or WAF already
+   does it.
+
+   A **named** limiter, deliberately. Laravel keys the `throttle:n,m`
+   shorthand on `sha1($domain.'|'.$ip)` — the route isn't in the key — so
+   every shorthand throttle in a host application shares one counter per
+   visitor IP, and the host's strictest route silently pays for this
+   endpoint's traffic. A tracker flushing every five seconds would then
+   start refusing the host's checkout. A named limiter is keyed on
+   `md5($limiterName.$key)` and can never do that.
+
+   Define your own `analytics-collect` limiter in an application provider
+   to override it entirely — application providers boot after package
+   ones, and the last registration for a name wins.
 2. `VerifyAnalyticsOrigin` — compares `Origin`/`Referer` against
    `config('app.url')`. A mismatch gets a silent `202` no-op, never a
    `403`, so a prober can't distinguish "blocked" from "accepted."

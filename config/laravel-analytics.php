@@ -56,6 +56,38 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Ingestion rate limit
+    |--------------------------------------------------------------------------
+    |
+    | The collect endpoint is anonymous and CSRF-exempt (sendBeacon cannot set
+    | a header), so it is throttled — but it is also the one endpoint a normal
+    | visitor hits simply by browsing, and the reference tracker flushes on a
+    | five-second timer *per tab*. A limit sized for a form submission turns
+    | ordinary use into 429s, and a 429 here is not a lost metric: on a host
+    | whose throttle middleware shares one counter per visitor, it is a lost
+    | checkout on a completely unrelated route.
+    |
+    | So: generous by default, and keyed per visitor with a per-IP backstop, so
+    | a NAT'd office or a carrier gateway is not one visitor. Set the per-minute
+    | figure to 0 to disable throttling entirely — only sensible where something
+    | in front of the app (a CDN, a WAF) is already doing it.
+    |
+    */
+
+    'rate_limit' => [
+        // Per visitor_id + IP. The visitor id is client-generated and therefore
+        // not to be trusted on its own, which is what the backstop is for.
+        'per_visitor' => (int) env('ANALYTICS_RATE_LIMIT_PER_VISITOR', 300),
+
+        // Per IP, whatever visitor ids are claimed behind it. Sized for a large
+        // shared egress rather than one person.
+        'per_ip' => (int) env('ANALYTICS_RATE_LIMIT_PER_IP', 3000),
+
+        'decay_minutes' => (int) env('ANALYTICS_RATE_LIMIT_DECAY_MINUTES', 1),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Retention
     |--------------------------------------------------------------------------
     |

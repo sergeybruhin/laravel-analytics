@@ -2,9 +2,12 @@
 
 namespace SergeyBruhin\Analytics\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Events\MigrationsStarted;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use SergeyBruhin\Analytics\Analytics;
@@ -44,6 +47,8 @@ class AnalyticsServiceProvider extends ServiceProvider
             __DIR__.'/../../database/migrations/postgres' => database_path('migrations'),
         ], 'analytics-migrations');
 
+        $this->registerCollectRateLimiter();
+
         // Own middleware group membership (throttle + origin check) rather
         // than 'api', since this host has no routes/api.php — every /api/*
         // endpoint here already runs under 'web'. Wrapping in 'web' also
@@ -78,6 +83,59 @@ class AnalyticsServiceProvider extends ServiceProvider
             $schema = $this->app['config']->get("database.connections.{$connectionName}.search_path", 'analytics');
 
             DB::connection($connectionName)->statement("CREATE SCHEMA IF NOT EXISTS \"{$schema}\"");
+        });
+    }
+
+    /**
+     * The rate limit for the collect endpoint.
+     *
+     * A *named* limiter rather than the `throttle:n,m` shorthand, and that is
+     * the important part. Laravel keys the shorthand on
+     * sha1($domain.'|'.$ip) — the route is not in the key — so every shorthand
+     * throttle in a host application shares one counter per visitor IP, and the
+     * strictest route in that application silently pays for this endpoint's
+     * traffic. Ingesting analytics would then refuse a checkout. A named
+     * limiter is keyed on md5($limiterName.$key) and can never do that to its
+     * host, whatever the host's routes declare.
+     *
+     * Registered in boot() so a host that wants different behaviour can define
+     * its own `analytics-collect` limiter in a provider of its own — the last
+     * registration for a name wins, and application providers boot after
+     * package ones.
+     */
+    private function registerCollectRateLimiter(): void
+    {
+        RateLimiter::for('analytics-collect', function (Request $request) {
+            $config = $this->app['config'];
+
+            $perVisitor = (int) $config->get('laravel-analytics.rate_limit.per_visitor', 300);
+            $perIp = (int) $config->get('laravel-analytics.rate_limit.per_ip', 3000);
+            $decay = max(1, (int) $config->get('laravel-analytics.rate_limit.decay_minutes', 1));
+
+            // Either figure at zero switches its limit off; both off means the
+            // endpoint is deliberately unthrottled here (something in front of
+            // the app is doing it instead).
+            if ($perVisitor <= 0 && $perIp <= 0) {
+                return Limit::none();
+            }
+
+            $limits = [];
+
+            if ($perVisitor > 0) {
+                // The visitor id the tracker sends. Client-generated, so it is
+                // a way of not punishing everyone behind one NAT — never a way
+                // of proving who is calling. That is what the backstop is for.
+                $visitor = (string) $request->input('visitor_id', '');
+
+                $limits[] = Limit::perMinutes($decay, $perVisitor)
+                    ->by('visitor:'.$request->ip().'|'.$visitor);
+            }
+
+            if ($perIp > 0) {
+                $limits[] = Limit::perMinutes($decay, $perIp)->by('ip:'.$request->ip());
+            }
+
+            return $limits;
         });
     }
 
