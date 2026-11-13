@@ -28,6 +28,7 @@ class Session extends Model
         return [
             'click_ids' => 'array',
             'is_bot' => 'boolean',
+            'is_internal' => 'boolean',
             'started_at' => 'datetime',
             'ended_at' => 'datetime',
         ];

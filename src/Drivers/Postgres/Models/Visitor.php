@@ -29,6 +29,7 @@ class Visitor extends Model
         return [
             'first_click_ids' => 'array',
             'traits' => 'array',
+            'is_internal' => 'boolean',
             'first_seen_at' => 'datetime',
             'last_seen_at' => 'datetime',
         ];

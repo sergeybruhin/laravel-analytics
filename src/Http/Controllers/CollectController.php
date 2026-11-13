@@ -3,6 +3,7 @@
 namespace SergeyBruhin\Analytics\Http\Controllers;
 
 use Illuminate\Routing\Controller;
+use SergeyBruhin\Analytics\Analytics;
 use SergeyBruhin\Analytics\Http\Requests\CollectRequest;
 use SergeyBruhin\Analytics\Jobs\RecordAnalyticsHitJob;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,6 +22,9 @@ class CollectController extends Controller
             site: $site,
             ip: (string) $request->ip(),
             userAgent: (string) $request->userAgent(),
+            // Decided here, not in the job: the host's resolver needs the
+            // request (its session, its cookies), which the queue does not carry.
+            internal: Analytics::isInternalRequest($request),
         )->onConnection(config('laravel-analytics.queue_connection', 'redis_analytics'));
 
         return response()->noContent(202);

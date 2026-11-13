@@ -31,6 +31,21 @@ abstract class TestCase extends BaseTestCase
         $app['config']->set('laravel-analytics.site', 'test-site');
         $app['config']->set('queue.default', 'sync');
 
+        // ANALYTICS_TEST_DB_DRIVER=sqlite runs the suite without a Postgres
+        // server (the schema is portable apart from one partial index, which
+        // the sessions migration only creates on pgsql). Postgres stays the
+        // default and the reference: it is what every install runs.
+        if (env('ANALYTICS_TEST_DB_DRIVER') === 'sqlite') {
+            $app['config']->set('database.connections.analytics', [
+                'driver' => 'sqlite',
+                'database' => ':memory:',
+                'prefix' => '',
+                'foreign_key_constraints' => true,
+            ]);
+
+            return;
+        }
+
         $app['config']->set('database.connections.analytics', [
             'driver' => 'pgsql',
             'host' => env('ANALYTICS_TEST_DB_HOST', '127.0.0.1'),

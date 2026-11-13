@@ -218,16 +218,72 @@ Do this from a queued listener on your own domain event (e.g.
 `OrderPlaced`), not inline in a controller — keep the analytics write off
 the request path that has to succeed for checkout.
 
+## Identity: linking visitors to your users
+
+`identify()` attaches a visitor to an identity of your own. Call it wherever
+you learn who the visitor is (login, registration, checkout). One external id
+may own several visitors, e.g. a customer's phone and laptop:
+
+```php
+app(Analytics::class)->identify($visitorId, "customer:{$customer->id}");
+
+app(Analytics::class)->visitorIdsFor("customer:{$customer->id}"); // every device, oldest first
+```
+
+Traits are only written when you pass them, so a later bare `identify()` keeps
+what an earlier one recorded.
+
+## Internal traffic (staff, test devices)
+
+Tell the collector which requests are your own. The resolver runs on every
+collect request with the session and cookies available. A visitor it flags
+stays internal for good, and every session that visitor opens is stored with
+`is_internal = true`:
+
+```php
+// AppServiceProvider::boot()
+Analytics::resolveInternalUsing(fn (Request $request) => auth('web')->check());
+```
+
+You can also flag a visitor yourself with `markInternal($visitorId)` (this
+also updates its existing sessions), and clear the flag with
+`unmarkInternal()`. Internal rows are kept, not dropped. The Nova tool
+excludes them by default and has an "include internal" filter.
+
+## Traffic sources and journeys
+
+`Support\TrafficSourceClassifier` turns raw attribution into a
+`TrafficSource` (channel + source). Precedence: utm tags, then an ad click id
+(`yclid`, `gclid`, …), then the referrer's host (search engine → `organic`,
+social network → `social`, anything else → `referral`). With none of these, or
+with a referrer from your own hosts, the visit is `direct`:
+
+```php
+(new TrafficSourceClassifier)->classify(
+    utm: ['source' => $visitor->first_utm_source, 'medium' => $visitor->first_utm_medium],
+    clickIds: $visitor->first_click_ids ?? [],
+    referrer: $visitor->first_referrer,
+    ownHosts: ['example.com'],
+)->label(); // "yandex / organic"
+```
+
+`Support\VisitorJourney` is the read side for a per-customer timeline. It
+returns a set of visitors' sessions (newest first, bots excluded), each with
+its pageviews and events, plus the events recorded server-side without a
+session. Merge your own milestones (orders, payments) into it in the host.
+
 ## Data model
 
 Four tables on the `analytics` connection, all carrying a `site` column:
 
 - **`visitors`** — one row per anonymous visitor (uuid id). First-touch
   `utm_*`/click-id fields, set once and never overwritten. Optional
-  `external_id` + `traits` (jsonb) once `identify()` is called.
+  `external_id` + `traits` (jsonb) once `identify()` is called (several
+  visitors may share one external id), and `is_internal`.
 - **`sessions`** — one row per session (uuid id), FK to visitor. Last-touch
   `utm_*`/click-ids (a non-direct hit overwrites these; a direct hit
-  doesn't), device/browser/OS, `is_bot`, truncated IP.
+  doesn't), device/browser/OS, `is_bot`, `is_internal` (copied from the
+  visitor at write time), truncated IP.
 - **`pageviews`** — one row per page load. `url`, `path`, `referrer`,
   `title`, `duration_ms`.
 - **`events`** — one generic row per named event (`purchase`,
@@ -342,9 +398,23 @@ against a real Postgres connection — set `ANALYTICS_TEST_DB_HOST` /
 `_PORT` / `_DATABASE` / `_USERNAME` / `_PASSWORD` to point it at a
 disposable database/schema before running.
 
+Without a Postgres server, `ANALYTICS_TEST_DB_DRIVER=sqlite vendor/bin/phpunit`
+runs the same suite on an in-memory SQLite database. The schema is portable,
+apart from one Postgres-only partial index, which is skipped there.
+
+## Upgrading
+
+Migrations are published into the host app (`vendor:publish --tag=analytics-migrations`),
+so a release that adds one needs it copied over. Republishing copies only the
+files the app doesn't have yet. Then run `php artisan migrate`:
+
+- **0.0.4:** `add_internal_flags_and_multi_device_identity` adds `is_internal`
+  to `visitors` and `sessions` and turns the unique `(site, external_id)` index
+  into a plain one.
+
 ## Changelog
 
-See the [GitHub releases](https://github.com/sergeybruhin/laravel-analytics/releases) for a version history.
+See [CHANGELOG.md](CHANGELOG.md) and the [GitHub releases](https://github.com/sergeybruhin/laravel-analytics/releases).
 
 ## License
 

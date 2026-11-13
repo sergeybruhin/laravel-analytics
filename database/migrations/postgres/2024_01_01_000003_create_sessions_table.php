@@ -39,6 +39,10 @@ return new class extends Migration
         // (it has no cross-database equivalent) — reporting queries almost
         // always exclude bot traffic, so this keeps that filter cheap as the
         // table grows.
+        if (DB::connection('analytics')->getDriverName() !== 'pgsql') {
+            return;
+        }
+
         $schema = config('database.connections.analytics.search_path', 'analytics');
         DB::connection('analytics')->statement(
             "CREATE INDEX sessions_site_started_at_not_bot_idx ON \"{$schema}\".\"sessions\" (site, started_at) WHERE is_bot = false"

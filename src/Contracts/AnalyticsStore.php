@@ -48,4 +48,17 @@ interface AnalyticsStore
      * @param  array<string, mixed>  $traits
      */
     public function identify(string $visitorId, string $externalId, array $traits = []): void;
+
+    /**
+     * Flag a visitor as the host's own traffic (staff, a test device), for
+     * good, together with every session it has opened. Idempotent.
+     */
+    public function markInternal(string $visitorId): void;
+
+    /**
+     * Clear the flag set by markInternal() — for a visitor marked by mistake.
+     */
+    public function unmarkInternal(string $visitorId): void;
+
+    public function isInternal(string $visitorId): bool;
 }

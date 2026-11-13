@@ -32,6 +32,8 @@ class RecordAnalyticsHitJob implements ShouldQueue
         public readonly string $site,
         public readonly string $ip,
         public readonly string $userAgent,
+        // Defaulted so a job queued by the previous release still unserializes.
+        public readonly bool $internal = false,
     ) {}
 
     public function handle(AnalyticsStore $store, BotDetector $bots, IpAnonymizer $ips): void
@@ -59,6 +61,12 @@ class RecordAnalyticsHitJob implements ShouldQueue
             'first_click_ids' => $clickIds !== [] ? $clickIds : null,
         ], static fn ($value) => $value !== null));
 
+        // Once internal, always internal: the flag sticks to the visitor, and
+        // every session it opens inherits it here so reports never join back.
+        if ($this->internal) {
+            $store->markInternal($visitorId);
+        }
+
         $sessionAttributes = array_filter([
             'exit_url' => $this->lastPageviewUrl(),
             'device_type' => $parsedAgent['device_type'],
@@ -67,6 +75,8 @@ class RecordAnalyticsHitJob implements ShouldQueue
             'is_bot' => $isBot,
             'ip_truncated' => $ipTruncated,
         ], static fn ($value) => $value !== null);
+
+        $sessionAttributes['is_internal'] = $this->internal || $store->isInternal($visitorId);
 
         // Last-non-direct-click-wins: only overwrite utm_*/click_ids when
         // this hit actually carried attribution, matching the semantics

@@ -77,9 +77,35 @@ class PostgresStore implements AnalyticsStore
 
     public function identify(string $visitorId, string $externalId, array $traits = []): void
     {
-        Visitor::on($this->connection)->whereKey($visitorId)->update([
-            'external_id' => $externalId,
-            'traits' => $traits === [] ? null : $traits,
-        ]);
+        // Traits only when given: a later identify() without them (a login
+        // after a checkout, say) must not wipe what an earlier one recorded.
+        $attributes = ['external_id' => $externalId];
+
+        if ($traits !== []) {
+            $attributes['traits'] = json_encode($traits);
+        }
+
+        Visitor::on($this->connection)->whereKey($visitorId)->update($attributes);
+    }
+
+    public function markInternal(string $visitorId): void
+    {
+        $this->setInternal($visitorId, true);
+    }
+
+    public function unmarkInternal(string $visitorId): void
+    {
+        $this->setInternal($visitorId, false);
+    }
+
+    public function isInternal(string $visitorId): bool
+    {
+        return Visitor::on($this->connection)->whereKey($visitorId)->where('is_internal', true)->exists();
+    }
+
+    private function setInternal(string $visitorId, bool $internal): void
+    {
+        Visitor::on($this->connection)->whereKey($visitorId)->update(['is_internal' => $internal]);
+        Session::on($this->connection)->where('visitor_id', $visitorId)->update(['is_internal' => $internal]);
     }
 }
